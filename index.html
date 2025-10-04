@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Date-Specific Weather Predictor</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for a modern look */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue/gray background */
+            padding-top: 64px; /* Space for the fixed navbar */
+            /* FIX 1: Ensure body uses flexbox to manage vertical space */
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        main {
+            /* FIX 2: Allow main content to take up all remaining space */
+            flex-grow: 1;
+        }
+        .weather-card, .info-card {
+            backdrop-filter: blur(10px);
+            background-color: rgba(255, 255, 255, 0.85); /* Slightly translucent white */
+        }
+        .loading-spinner {
+            border-top-color: #3b82f6;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .forecast-item {
+            flex-shrink: 0; 
+            min-width: 90px;
+        }
+        /* Style for active navbar link */
+        .nav-link.active {
+            color: #3b82f6; /* Blue text */
+            border-bottom: 2px solid #3b82f6;
+        }
+
+        /* ⛈️ NEW: Rain Highlight Style ⛈️ */
+        .rain-highlight {
+            background-color: #dbeafe; /* Light blue background */
+            border: 2px solid #3b82f6; /* Blue border */
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3), 0 4px 6px -2px rgba(59, 130, 246, 0.1);
+            transform: scale(1.05); /* Slightly larger */
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. NAVIGATION BAR (Sticky) -->
+    <nav class="fixed top-0 left-0 w-full bg-white shadow-lg z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo/Title -->
+                <div class="flex-shrink-0">
+                    <span class="text-2xl font-bold text-gray-900 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-blue-500 mr-2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M20 12h2"/><path d="M2 12h2"/><path d="M18.36 5.64l-1.42 1.42"/><path d="M6.34 17.66l-1.42 1.42"/><path d="M17.66 18.36l1.42 1.42"/><path d="M5.64 6.34l-1.42-1.42"/></svg>
+                        PredictaStorm
+                    </span>
+                </div>
+                
+                <!-- Desktop Navigation Links -->
+                <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                    <a href="#home" id="nav-home" class="nav-link active text-gray-500 hover:text-gray-900 inline-flex items-center px-1 pt-1 text-sm font-medium transition duration-150" onclick="navigateTo('home')">Home</a>
+                    <!-- RE-INSERTED: About Us Link -->
+                    <a href="#about" id="nav-about" class="nav-link text-gray-500 hover:text-gray-900 inline-flex items-center px-1 pt-1 text-sm font-medium transition duration-150" onclick="navigateTo('about')">About Us</a>
+                    <a href="#contact" id="nav-contact" class="nav-link text-gray-500 hover:text-gray-900 inline-flex items-center px-1 pt-1 text-sm font-medium transition duration-150" onclick="navigateTo('contact')">Contact Us</a>
+                </div>
+                
+                <!-- Mobile Menu Button (Hidden for brevity, but the links above handle navigation) -->
+            </div>
+        </div>
+    </nav>
+
+    <!-- 2. MAIN CONTENT AREA -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- HOME VIEW (Weather Forecast) -->
+        <div id="home-view" class="view">
+            <div class="weather-card w-full max-w-lg mx-auto p-8 rounded-xl shadow-2xl transition-all duration-300">
+                <h2 class="text-3xl font-extrabold text-center text-gray-800 mb-6 flex items-center justify-center">
+                    Date-Specific Forecast <span class="ml-2 text-blue-500">🌤️</span>
+                </h2>
+
+                <div class="space-y-4">
+                    <input type="text" id="city-input" value="Surat" placeholder="Enter City Name (e.g., London)"
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition duration-150">
+                    
+                    <input type="date" id="date-input" 
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition duration-150">
+                    
+                    <button id="forecast-button" 
+                            class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-150 active:scale-95">
+                        Get Forecast
+                    </button>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="loading-indicator" class="hidden flex justify-center items-center mt-6">
+                    <div class="loading-spinner w-8 h-8 border-4 border-gray-200 border-t-blue-500 rounded-full"></div>
+                    <span class="ml-3 text-gray-600">Requesting forecast...</span>
+                </div>
+
+                <!-- Error Message -->
+                <div id="error-message" class="hidden mt-6 p-3 rounded-lg text-center" role="alert">
+                    <p id="error-text" class="flex items-center justify-center"></p>
+                </div>
+
+                <!-- Weather Display Result -->
+                <div id="weather-display" class="hidden mt-6 opacity-0 transition duration-500">
+                    <!-- Header -->
+                    <div class="text-center mb-4">
+                        <p class="text-4xl font-bold text-gray-700" id="city-country"></p>
+                        <p class="text-lg text-blue-500" id="forecast-date"></p>
+                    </div>
+
+                    <!-- Hourly Forecast Scroll Container -->
+                    <div id="hourly-forecast-container" 
+                         class="flex overflow-x-scroll space-x-4 p-2 bg-gray-50 rounded-lg shadow-inner">
+                        <!-- Hourly items will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ABOUT US VIEW -->
+        <div id="about-view" class="view hidden">
+            <div class="info-card p-8 rounded-xl shadow-2xl bg-white max-w-3xl mx-auto">
+                <h2 class="text-3xl font-extrabold text-gray-800 mb-6 text-center">About Team PredictStorm</h2>
+                <div class="prose max-w-none text-gray-700">
+                    <h3 class="text-2xl font-extrabold text-center text-blue-600 mb-4">
+                        🌩️ Team PredictaStorm 🌩️
+                    </h3>
+                    <p class="text-center italic mb-6 text-lg">
+                        “Because every drop counts!” ☔✨
+                    </p>
+
+                    <p class="mb-6">
+                        We are a team of 6 passionate innovators united under the name PredictStorm. Our mission is simple yet powerful: to answer the timeless question—“Will it rain on my parade?” We’re building a smart, reliable, and user-friendly weather prediction system that goes beyond just forecasts—it helps people plan their days with confidence.
+                    </p>
+
+                    <h3 class="text-xl font-bold mt-6 mb-3 text-blue-600">✨ Who We Are</h3>
+                    <p class="mb-4">
+                        We’re dreamers, doers, and problem-solvers with a shared love for data, AI, and creating tech that genuinely improves lives. Our curiosity drives us to explore the science of weather forecasting and transform it into simple tools that everyone can use.
+                    </p>
+
+                    <h3 class="text-xl font-bold mt-6 mb-3 text-blue-600">⚡ Our Skills</h3>
+                    <p class="mb-4">
+                        From coding wizards and data crunchers to design thinkers and storytellers, our team is a blend of creativity and technical power. We specialize in turning complex weather data into clear insights—because weather predictions should never feel like rocket science! 🚀
+                    </p>
+
+                    <h3 class="text-xl font-bold mt-6 mb-3 text-blue-600">🌦️ Why Join PredictStorm?</h3>
+                    <p class="mb-4">
+                        Because here, you won’t just build tech—you’ll build impact. Every feature we create is aimed at making someone’s life easier, whether it’s planning a picnic, a wedding, or simply knowing when to carry an umbrella. Together, we’re not just predicting weather—we’re predicting smiles, safety, and better experiences. 🌈
+                    </p>
+
+                    <h3 class="text-xl font-bold mt-6 mb-3 text-blue-600">🔍 What We’re Looking For</h3>
+                    <p>
+                        We’re always excited to welcome curious minds who can bring fresh energy to our storm! Skills that can power up PredictStorm include:
+                    </p>
+                    <ul class="list-disc list-inside space-y-2 pl-4 mt-2">
+                        <li>Machine Learning / AI → to craft smarter prediction models</li>
+                        <li>Data Visualization → to make forecasts crystal clear & engaging</li>
+                        <li>UI/UX Design → to build an app people love to use</li>
+                        <li>API Integration → to connect with live weather data seamlessly</li>
+                    </ul>
+                    
+                    <p class="mt-8 text-center text-lg font-bold">
+                        💡 With PredictStorm, the future of weather prediction isn’t cloudy—it’s bright. 🌟
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTACT US VIEW -->
+        <div id="contact-view" class="view hidden">
+            <div class="info-card p-8 rounded-xl shadow-2xl bg-white max-w-4xl mx-auto">
+                <h2 class="text-3xl font-extrabold text-gray-800 mb-8 text-center">Meet Our Team</h2>
+                <div id="team-members" class="grid grid-cols-2 md:grid-cols-3 gap-8">
+                    <!-- Team members will be injected here by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 3. SIMPLE FOOTER -->
+    <footer class="mt-12 py-4 bg-gray-200 text-center text-gray-600 text-sm">
+        <!-- FIX 3: Corrected dynamic year to use JavaScript expression directly -->
+        <p>&copy; <script>document.write(new Date().getFullYear())</script> PredictaStorm Team.</p>
+    </footer>
+
+
+    <script>
+        // --- CONFIGURATION ---
+        // FIX: Reverting to explicit localhost URL for testing in the current environment.
+        // The Flask server runs on 127.0.0.1:5000 and the endpoint is /api/forecast.
+        const API_BASE_URL = 'http://127.0.0.1:5000/api/forecast'; 
+        const MAX_FORECAST_DAYS = 5; 
+
+        // --- Element References ---
+        const forecastButton = document.getElementById('forecast-button');
+        const cityInput = document.getElementById('city-input');
+        const dateInput = document.getElementById('date-input');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const weatherDisplay = document.getElementById('weather-display');
+        const errorMessage = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+        const hourlyForecastContainer = document.getElementById('hourly-forecast-container');
+        const teamMembersContainer = document.getElementById('team-members');
+
+        // --- Team Member Data ---
+        // 🚨 IMPORTANT: The 'photoUrl' field must be replaced with the actual image URL for each member.
+        // CURRENTLY USING RELIABLE PUBLIC PLACEHOLDERS.
+        const teamData =  [
+            { name: "Bhumika Vadchhak", role: "Project Lead", linkedin: "https://www.linkedin.com/in/bhumika-vadchhak-847a54332?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app", photoUrl: "./images/bhumi.jpeg" },
+            { name: "Krishna Hadiya", role: "Backend Developer", linkedin: "https://www.linkedin.com/in/krishna-hadiya-873905274?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app", photoUrl: "./images/krishna.jpeg" },
+            { name: "Krisha Simariya", role: "Frontend UI/UX", linkedin: "https://www.linkedin.com/in/krisha-simariya-49554028a?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app", photoUrl: "./images/krisha.jpeg" },
+            { name: "Om Makwana", role: "Data Analyst", linkedin: "https://www.linkedin.com/in/om-makwana-490aa7239?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app", photoUrl: "./images/om.jpeg" },
+            { name: "Het Patel", role: "Deployment Specialist", linkedin: "https://www.linkedin.com/in/patel-het-kumar-3637a332b?utm_source=share_via&utm_content=profile&utm_medium=member_android", photoUrl: "./images/het.jpeg" },
+            { name: "Dhruv Patel", role: "Quality Assurance", linkedin: "https://www.linkedin.com/in/patel-dhruv-3916aa228?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app", photoUrl: "./images/dhruv.jpeg" }
+        ];
+
+        // --- Core View Switching Logic ---
+        function navigateTo(targetViewId) {
+            const views = document.querySelectorAll('.view');
+            const navLinks = document.querySelectorAll('.nav-link');
+
+            // Hide all views and remove active class from links
+            views.forEach(view => view.classList.add('hidden'));
+            navLinks.forEach(link => link.classList.remove('active'));
+
+            // Show the target view
+            const targetView = document.getElementById(targetViewId + '-view');
+            if (targetView) {
+                targetView.classList.remove('hidden');
+            }
+
+            // Set the active link
+            const activeLink = document.getElementById('nav-' + targetViewId);
+            if (activeLink) {
+                activeLink.classList.add('active');
+            }
+        }
+
+        // --- UI Feedback Functions (Existing Logic) ---
+        function showLoading() {
+            errorMessage.classList.add('hidden');
+            weatherDisplay.classList.add('opacity-0', 'hidden');
+            loadingIndicator.classList.remove('hidden');
+            forecastButton.disabled = true;
+        }
+
+        function hideLoading() {
+            loadingIndicator.classList.add('hidden');
+            forecastButton.disabled = false;
+        }
+
+        // NEW: Enhanced error display to differentiate between critical errors and known limitations
+        function showError(message) {
+            weatherDisplay.classList.add('opacity-0', 'hidden');
+            errorMessage.classList.remove('hidden');
+
+            const isLimitError = message.includes("Forecast is limited to");
+            
+            // Set alert colors and icon based on error type
+            if (isLimitError) {
+                // Known limitation (Warning color)
+                errorMessage.className = 'mt-6 p-3 rounded-lg text-center bg-yellow-100 border border-yellow-400 text-yellow-700';
+                errorText.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <span>${message}</span>
+                `;
+            } else {
+                // Critical/Network Error (Danger color)
+                errorMessage.className = 'mt-6 p-3 rounded-lg text-center bg-red-100 border border-red-400 text-red-700';
+                 errorText.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <span>${message}</span>
+                `;
+            }
+        }
+
+        function showResult() {
+            errorMessage.classList.add('hidden');
+            weatherDisplay.classList.remove('hidden');
+            setTimeout(() => {
+                weatherDisplay.classList.remove('opacity-0');
+            }, 10);
+        }
+
+        // --- Data Rendering Function ---
+        function renderForecast(data) {
+            document.getElementById('city-country').textContent = `${data.city}, ${data.country}`;
+            
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const dateObj = new Date(data.date + 'T00:00:00'); 
+            document.getElementById('forecast-date').textContent = dateObj.toLocaleDateString('en-US', options);
+
+            hourlyForecastContainer.innerHTML = '';
+
+            data.hourly_data.forEach(item => {
+                const temp = Math.round(item.temp);
+                
+                // 🌧️ NEW: Rain Check Logic
+                const description = item.description.toLowerCase();
+                const isRainy = description.includes('rain') || description.includes('drizzle') || description.includes('shower');
+                const rainClass = isRainy ? 'rain-highlight' : 'bg-white border-gray-100';
+
+
+                const itemHtml = `
+                    <div class="forecast-item p-3 rounded-xl text-center shadow-lg transition hover:shadow-xl hover:scale-[1.02] ${rainClass}">
+                        <p class="font-semibold text-gray-700 text-sm">${item.time}</p>
+                        <img src="https://openweathermap.org/img/wn/${item.icon}.png" alt="${item.description}" class="w-12 h-12 mx-auto">
+                        <p class="text-xl font-bold text-blue-600">${temp}°C</p>
+                        <p class="text-xs text-gray-500">${item.humidity}% RH</p>
+                    </div>
+                `;
+                hourlyForecastContainer.insertAdjacentHTML('beforeend', itemHtml);
+            });
+            showResult();
+        }
+
+        // --- Team Rendering ---
+        function renderTeamMembers() {
+            teamMembersContainer.innerHTML = '';
+            teamData.forEach(member => {
+                // 🚨 The image source uses the 'photoUrl' field.
+                const memberHtml = `
+                    <div class="flex flex-col items-center text-center p-4 bg-gray-50 rounded-xl shadow-md transition hover:shadow-lg">
+                        <img src="${member.photoUrl}" 
+                             alt="${member.name} Photo" 
+                             class="w-24 h-24 rounded-full object-cover mb-3 border-4 border-blue-200"
+                             onerror="this.onerror=null; this.src='https://placehold.co/100x100/94a3b8/ffffff?text=No+Photo'">
+                        <p class="text-xl font-bold text-gray-800">${member.name}</p>
+                        <p class="text-sm text-blue-600 mb-3">${member.role}</p>
+                        <a href="${member.linkedin}" target="_blank" 
+                           class="text-xs text-gray-500 hover:text-blue-700 transition duration-150 flex items-center">
+                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-1"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>
+                           LinkedIn Profile
+                        </a>
+                    </div>
+                `;
+                teamMembersContainer.insertAdjacentHTML('beforeend', memberHtml);
+            });
+        }
+
+        // --- Main Fetch Logic ---
+        forecastButton.addEventListener('click', async () => {
+            if (document.getElementById('home-view').classList.contains('hidden')) return; // Don't run if not on home view
+
+            const city = cityInput.value.trim();
+            const dateStr = dateInput.value; 
+
+            if (!city || !dateStr) {
+                showError("Please enter both city and date.");
+                return;
+            }
+
+            showLoading();
+            
+            // Construct the URL with query parameters
+            // This now correctly uses the full, explicit API_BASE_URL
+            const url = `${API_BASE_URL}?city=${encodeURIComponent(city)}&date=${encodeURIComponent(dateStr)}`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (response.ok) {
+                    renderForecast(data);
+                } else {
+                    showError(data.error || `Server Error: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Fetch Error:', error);
+                showError("Could not connect to the API. Check network or ensure your Python server is running.");
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // --- Initialization Logic ---
+        window.onload = () => {
+            // Fix 1: Updated date calculation to prevent selecting past dates and strictly adhere to MAX_FORECAST_DAYS.
+            const dateToYYYYMMDD = (d) => {
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
+            };
+            
+            // Get today's date (local timezone, but stripped of time for date comparison)
+            const todayLocal = new Date();
+            todayLocal.setHours(0, 0, 0, 0); 
+            
+            // Min date is tomorrow
+            const tomorrow = new Date(todayLocal);
+            tomorrow.setDate(todayLocal.getDate() + 1);
+
+            // Max date is tomorrow + (MAX_FORECAST_DAYS - 2) days.
+            const maxForecastDate = new Date(todayLocal);
+            maxForecastDate.setDate(todayLocal.getDate() + MAX_FORECAST_DAYS); 
+            
+            const tomorrowDateString = dateToYYYYMMDD(tomorrow);
+            const maxDateString = dateToYYYYMMDD(maxForecastDate);
+
+            // Set input constraints
+            dateInput.value = tomorrowDateString;
+            dateInput.min = tomorrowDateString; 
+            dateInput.max = maxDateString; 
+
+            // Initialize views and team members
+            navigateTo('home');
+            renderTeamMembers();
+        };
+    </script>
+</body>
+</html>
